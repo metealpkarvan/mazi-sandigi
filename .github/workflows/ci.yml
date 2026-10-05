@@ -1,0 +1,51 @@
+name: Native builds and universal package
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            arch: x86_64
+          - os: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify native runner architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          swift --version
+      - name: Test archive rules and game engines
+        run: swift run -j 2 MaziRulesTests
+      - name: Build native app
+        run: swift build -j 2 --product MaziSandigi
+      - name: Exercise AppKit controls and render fictional examples
+        run: .build/debug/MaziSandigi --smoke-test --screenshots output/verification
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: native-previews-${{ matrix.arch }}
+          path: output/verification/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+  universal:
+    needs: native
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and verify the universal app
+        run: ./scripts/package.sh 1.0.0
+      - uses: actions/upload-artifact@v7
+        with:
+          name: MaziSandigi-universal
+          path: |
+            dist/MaziSandigi-v1.0.0-universal.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
